@@ -27,7 +27,6 @@
     "isomorphic-fetch": "^2.1.0",
     "js-binarypack": "0.0.9",
     "reliable": "git+https://github.com/michelle/reliable.git",
-    "request": "^2.57.0",
     "ws": "^0.7.2"
   }
 }
