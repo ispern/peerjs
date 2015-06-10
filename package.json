@@ -1,13 +1,13 @@
 {
   "name": "skyway-peerjs-electron",
   "version": "0.3.14",
-  "description": "PeerJS client",
+  "description": "PeerJS client for Electron & skyway.io",
   "main": "./lib/peer.js",
   "repository": {
     "type": "git",
-    "url": "git://github.com/peers/peerjs.git"
+    "url": "git://github.com/pirosikick/peerjs.git"
   },
-  "author": "Michelle Bu, Eric Zhang, NTT Communications",
+  "author": "Michelle Bu, Eric Zhang, NTT Communications, pirosikick",
   "license": "MIT",
   "scripts": {
     "prepublish": "./node_modules/.bin/grunt"
@@ -28,5 +28,6 @@
     "js-binarypack": "0.0.9",
     "reliable": "git+https://github.com/michelle/reliable.git",
     "ws": "^0.7.2"
-  }
+  },
+  "files": ["lib", "dist", "LICENSE"]
 }
