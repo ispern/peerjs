@@ -1,5 +1,5 @@
 {
-  "name": "peerjs",
+  "name": "skyway-peerjs-electron",
   "version": "0.3.14",
   "description": "PeerJS client",
   "main": "./lib/peer.js",
@@ -22,8 +22,12 @@
     "mocha": "*"
   },
   "dependencies": {
+    "es6-promise": "^2.2.0",
     "eventemitter3": "0.1.5",
+    "isomorphic-fetch": "^2.1.0",
     "js-binarypack": "0.0.9",
-    "reliable": "git+https://github.com/michelle/reliable.git"
+    "reliable": "git+https://github.com/michelle/reliable.git",
+    "request": "^2.57.0",
+    "ws": "^0.7.2"
   }
 }
