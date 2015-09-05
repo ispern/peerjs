@@ -1316,7 +1316,7 @@ Peer.prototype.listAllPeers = function(cb) {
 
 module.exports = Peer;
 
-},{"./dataconnection":2,"./mediaconnection":4,"./socket":7,"./util":8,"es6-promise":9,"eventemitter3":10,"isomorphic-fetch":13}],7:[function(require,module,exports){
+},{"./dataconnection":2,"./mediaconnection":4,"./socket":7,"./util":8,"es6-promise":9,"eventemitter3":10,"isomorphic-fetch":12}],7:[function(require,module,exports){
 var util = require('./util');
 var EventEmitter = require('eventemitter3');
 var WebSocket = require('ws');
@@ -1924,7 +1924,7 @@ module.exports = util;
  * @copyright Copyright (c) 2014 Yehuda Katz, Tom Dale, Stefan Penner and contributors (Conversion to ES6 API by Jake Archibald)
  * @license   Licensed under MIT license
  *            See https://raw.githubusercontent.com/jakearchibald/es6-promise/master/LICENSE
- * @version   2.2.0
+ * @version   2.3.0
  */
 
 (function() {
@@ -1956,7 +1956,7 @@ module.exports = util;
     var lib$es6$promise$asap$$vertxNext;
     var lib$es6$promise$asap$$customSchedulerFn;
 
-    function lib$es6$promise$asap$$asap(callback, arg) {
+    var lib$es6$promise$asap$$asap = function asap(callback, arg) {
       lib$es6$promise$asap$$queue[lib$es6$promise$asap$$len] = callback;
       lib$es6$promise$asap$$queue[lib$es6$promise$asap$$len + 1] = arg;
       lib$es6$promise$asap$$len += 2;
@@ -1972,9 +1972,12 @@ module.exports = util;
       }
     }
 
-    var lib$es6$promise$asap$$default = lib$es6$promise$asap$$asap;
     function lib$es6$promise$asap$$setScheduler(scheduleFn) {
       lib$es6$promise$asap$$customSchedulerFn = scheduleFn;
+    }
+
+    function lib$es6$promise$asap$$setAsap(asapFn) {
+      lib$es6$promise$asap$$asap = asapFn;
     }
 
     var lib$es6$promise$asap$$browserWindow = (typeof window !== 'undefined') ? window : undefined;
@@ -2108,7 +2111,7 @@ module.exports = util;
     }
 
     function lib$es6$promise$$internal$$handleForeignThenable(promise, thenable, then) {
-       lib$es6$promise$asap$$default(function(promise) {
+       lib$es6$promise$asap$$asap(function(promise) {
         var sealed = false;
         var error = lib$es6$promise$$internal$$tryThen(then, thenable, function(value) {
           if (sealed) { return; }
@@ -2189,7 +2192,7 @@ module.exports = util;
       promise._state = lib$es6$promise$$internal$$FULFILLED;
 
       if (promise._subscribers.length !== 0) {
-        lib$es6$promise$asap$$default(lib$es6$promise$$internal$$publish, promise);
+        lib$es6$promise$asap$$asap(lib$es6$promise$$internal$$publish, promise);
       }
     }
 
@@ -2198,7 +2201,7 @@ module.exports = util;
       promise._state = lib$es6$promise$$internal$$REJECTED;
       promise._result = reason;
 
-      lib$es6$promise$asap$$default(lib$es6$promise$$internal$$publishRejection, promise);
+      lib$es6$promise$asap$$asap(lib$es6$promise$$internal$$publishRejection, promise);
     }
 
     function lib$es6$promise$$internal$$subscribe(parent, child, onFulfillment, onRejection) {
@@ -2212,7 +2215,7 @@ module.exports = util;
       subscribers[length + lib$es6$promise$$internal$$REJECTED]  = onRejection;
 
       if (length === 0 && parent._state) {
-        lib$es6$promise$asap$$default(lib$es6$promise$$internal$$publish, parent);
+        lib$es6$promise$asap$$asap(lib$es6$promise$$internal$$publish, parent);
       }
     }
 
@@ -2593,7 +2596,8 @@ module.exports = util;
     lib$es6$promise$promise$$Promise.resolve = lib$es6$promise$promise$resolve$$default;
     lib$es6$promise$promise$$Promise.reject = lib$es6$promise$promise$reject$$default;
     lib$es6$promise$promise$$Promise._setScheduler = lib$es6$promise$asap$$setScheduler;
-    lib$es6$promise$promise$$Promise._asap = lib$es6$promise$asap$$default;
+    lib$es6$promise$promise$$Promise._setAsap = lib$es6$promise$asap$$setAsap;
+    lib$es6$promise$promise$$Promise._asap = lib$es6$promise$asap$$asap;
 
     lib$es6$promise$promise$$Promise.prototype = {
       constructor: lib$es6$promise$promise$$Promise,
@@ -2804,7 +2808,7 @@ module.exports = util;
 
         if (state) {
           var callback = arguments[state - 1];
-          lib$es6$promise$asap$$default(function(){
+          lib$es6$promise$asap$$asap(function(){
             lib$es6$promise$$internal$$invokeCallback(state, child, callback, result);
           });
         } else {
@@ -3188,6 +3192,14 @@ process.chdir = function (dir) {
 process.umask = function() { return 0; };
 
 },{}],12:[function(require,module,exports){
+// the whatwg-fetch polyfill installs the fetch() function
+// on the global object (window or self)
+//
+// Return that as the export for use in Webpack, Browserify etc.
+require('whatwg-fetch');
+module.exports = self.fetch.bind(self);
+
+},{"whatwg-fetch":13}],13:[function(require,module,exports){
 (function() {
   'use strict';
 
@@ -3524,15 +3536,7 @@ process.umask = function() { return 0; };
   self.fetch.polyfill = true
 })();
 
-},{}],13:[function(require,module,exports){
-// the whatwg-fetch polyfill installs the fetch() function
-// on the global object (window or self)
-//
-// Return that as the export for use in Webpack, Browserify etc.
-require('whatwg-fetch');
-module.exports = self.fetch;
-
-},{"whatwg-fetch":12}],14:[function(require,module,exports){
+},{}],14:[function(require,module,exports){
 var BufferBuilder = require('./bufferbuilder').BufferBuilder;
 var binaryFeatures = require('./bufferbuilder').binaryFeatures;
 
