@@ -49,6 +49,7 @@ function DataConnection(peer, provider, options) {
     this._peerBrowser = this.options._payload.browser;
   }
 
+  util.log("startConnection from DataConnection");
   Negotiator.startConnection(
     this,
     this.options._payload || {
@@ -216,7 +217,15 @@ DataConnection.prototype._bufferedSend = function(msg) {
 // Returns true if the send succeeds.
 DataConnection.prototype._trySend = function(msg) {
   try {
-    this._dc.send(msg);
+    var data;
+
+    if ((window.webrtcDetectedBrowser === 'IE' || window.webrtcDetectedBrowser === 'safari') && msg instanceof ArrayBuffer) {
+      data = String.fromCharCode.apply(null, new Uint8Array(msg));
+    } else {     
+      data = msg;
+    }
+
+    this._dc.send(data);
   } catch (e) {
     this._buffering = true;
 
@@ -231,7 +240,6 @@ DataConnection.prototype._trySend = function(msg) {
   return true;
 }
 
-// Try to send the first message in the buffer.
 DataConnection.prototype._tryBuffer = function() {
   if (this._buffer.length === 0) {
     return;
@@ -309,6 +317,7 @@ function MediaConnection(peer, provider, options) {
   this.localStream = this.options._stream;
 
   this.id = this.options.connectionId || MediaConnection._idPrefix + util.randomToken();
+  util.log("startConnection from MediaConnection");
   if (this.localStream) {
     Negotiator.startConnection(
       this,
@@ -355,6 +364,7 @@ MediaConnection.prototype.answer = function(stream) {
 
   this.options._payload._stream = stream;
 
+  util.log("startConnection from answer step");
   this.localStream = stream;
   Negotiator.startConnection(
     this,
@@ -408,13 +418,14 @@ Negotiator._idPrefix = 'pc_';
 Negotiator.startConnection = function(connection, options) {
   var pc = Negotiator._getPeerConnection(connection, options);
 
+  // Set the connection's PC.
+  connection.pc = connection.peerConnection = pc;
+
   if (connection.type === 'media' && options._stream) {
     // Add the stream.
     pc.addStream(options._stream);
   }
 
-  // Set the connection's PC.
-  connection.pc = connection.peerConnection = pc;
   // What do we need to do now?
   if (options.originator) {
     if (connection.type === 'data') {
@@ -435,7 +446,11 @@ Negotiator.startConnection = function(connection, options) {
     }
 
     if (!util.supports.onnegotiationneeded) {
-      Negotiator._makeOffer(connection);
+      //Negotiator._makeOffer(connection);
+      // firefox
+      setTimeout(function(){
+        Negotiator._makeOffer(connection);
+      }, 0);
     }
   } else {
     Negotiator.handleSDP('OFFER', connection, options.sdp);
@@ -517,12 +532,20 @@ Negotiator._setupListeners = function(connection, pc, pc_id) {
   // ICE CANDIDATES.
   util.log('Listening for ICE candidates.');
   pc.onicecandidate = function(evt) {
-    if (evt.candidate) {
-      util.log('Received ICE candidates for:', connection.peer);
+    var candidate = evt.candidate || evt;
+
+    if (!candidate || candidate.candidate === null) {
+      util.log('ICE candidates gathering complete for:', connection.peer);
+    } else {
+      util.log('Generated ICE candidate for:', connection.peer, candidate);
       provider.socket.send({
         type: 'CANDIDATE',
         payload: {
-          candidate: evt.candidate,
+          candidate: {
+            sdpMid: candidate.sdpMid,
+            sdpMLineIndex: candidate.sdpMLineIndex,
+            candidate: candidate.candidate
+          },
           type: connection.type,
           connectionId: connection.id
         },
@@ -548,15 +571,21 @@ Negotiator._setupListeners = function(connection, pc, pc_id) {
   pc.onicechange = pc.oniceconnectionstatechange;
 
   // ONNEGOTIATIONNEEDED (Chrome)
-  util.log('Listening for `negotiationneeded`');
-  pc.onnegotiationneeded = function() {
-    util.log('`negotiationneeded` triggered');
-    if (pc.signalingState == 'stable') {
-      Negotiator._makeOffer(connection);
-    } else {
-      util.log('onnegotiationneeded triggered when not stable. Is another connection being established?');
-    }
-  };
+  if (util.supports.onnegotiationneeded) {
+    util.log('Listening for `negotiationneeded`');
+    pc.onnegotiationneeded = function() {
+      util.log('`negotiationneeded` triggered');
+      if (pc.signalingState == 'stable') {
+        setTimeout(function(ev){
+          // prevent error for FF40. When callee, before handling remoteDescription, calling _makeOffer makes error
+          // cause localDescription set. Delaying calls make it fix above mismatch.
+          Negotiator._makeOffer(connection);
+        }, 1);
+      } else {
+        util.log('onnegotiationneeded triggered when not stable. Is another connection being established?');
+      }
+    };
+  }
 
   // DATACONNECTION.
   util.log('Listening for data channel');
@@ -564,7 +593,7 @@ Negotiator._setupListeners = function(connection, pc, pc_id) {
   // in the options hash.
   pc.ondatachannel = function(evt) {
     util.log('Received data channel');
-    var dc = evt.channel;
+    var dc = evt.channel || evt;
     var connection = provider.getConnection(peerId, connectionId);
     connection.initialize(dc);
   };
@@ -573,7 +602,7 @@ Negotiator._setupListeners = function(connection, pc, pc_id) {
   util.log('Listening for remote stream');
   pc.onaddstream = function(evt) {
     util.log('Received remote stream');
-    var stream = evt.stream;
+    var stream = evt.stream || evt;
     var connection = provider.getConnection(peerId, connectionId);
     // 10/10/2014: looks like in Chrome 38, onaddstream is triggered after
     // setting the remote description. Our connection object in these cases
@@ -599,6 +628,9 @@ Negotiator.cleanup = function(connection) {
 
 Negotiator._makeOffer = function(connection) {
   var pc = connection.pc;
+
+  if(!!pc.remoteDescription && !!pc.remoteDescription.type) return;
+
   pc.createOffer(function(offer) {
     util.log('Created offer.');
 
@@ -611,7 +643,10 @@ Negotiator._makeOffer = function(connection) {
       connection.provider.socket.send({
         type: 'OFFER',
         payload: {
-          sdp: offer,
+          sdp: {
+            type: offer.type,
+            sdp: offer.sdp
+          },
           type: connection.type,
           label: connection.label,
           connectionId: connection.id,
@@ -647,7 +682,10 @@ Negotiator._makeAnswer = function(connection) {
       connection.provider.socket.send({
         type: 'ANSWER',
         payload: {
-          sdp: answer,
+          sdp: {
+            type: answer.type,
+            sdp: answer.sdp
+          },
           type: connection.type,
           connectionId: connection.id,
           browser: util.browser
@@ -665,8 +703,11 @@ Negotiator._makeAnswer = function(connection) {
 }
 
 /** Handle an SDP. */
-Negotiator.handleSDP = function(type, connection, sdp) {
-  sdp = new RTCSessionDescription(sdp);
+Negotiator.handleSDP = function(type, connection, receivedSdp) {
+  var sdp = new RTCSessionDescription({
+    type: receivedSdp.type,
+    sdp: receivedSdp.sdp
+  });
   var pc = connection.pc;
 
   util.log('Setting remote description', sdp);
@@ -684,8 +725,15 @@ Negotiator.handleSDP = function(type, connection, sdp) {
 
 /** Handle a candidate. */
 Negotiator.handleCandidate = function(connection, ice) {
+/*change log*/
+  // if ice is empty, ignore
+  if (!ice) {
+    return;
+  }
+
   var candidate = ice.candidate;
   var sdpMLineIndex = ice.sdpMLineIndex;
+  //var sdpMid = ice.sdpMid;
   connection.pc.addIceCandidate(new RTCIceCandidate({
     sdpMLineIndex: sdpMLineIndex,
     candidate: candidate
@@ -844,6 +892,12 @@ Peer.prototype._initializeServerConnection = function() {
       self._abort('socket-closed', 'Underlying socket is already closed.');
     }
   });
+   // Close sockets before unloading window
+   // Necessary as sometimes the brower doesn't close ws/xhr property
+   // especially for FF
+   window.onbeforeunload = function(ev) {
+     self.destroy();
+   }
 };
 
 /** Get a unique ID from the server via XHR. */
@@ -978,6 +1032,7 @@ Peer.prototype._handleMessage = function(message) {
             _payload: payload,
             metadata: payload.metadata
           });
+          util.log("MediaConnection created in OFFER");
           this._addConnection(peer, connection);
           this.emit('call', connection);
         } else if (payload.type === 'data') {
@@ -1080,6 +1135,7 @@ Peer.prototype.call = function(peer, stream, options) {
   options = options || {};
   options._stream = stream;
   var call = new MediaConnection(peer, this, options);
+  util.log("MediaConnection created in call method");
   this._addConnection(peer, call);
   return call;
 };
@@ -1146,9 +1202,9 @@ Peer.prototype.emitError = function(type, err) {
  */
 Peer.prototype.destroy = function() {
   if (!this.destroyed) {
+    this.destroyed = true;
     this._cleanup();
     this.disconnect();
-    this.destroyed = true;
   }
 };
 
@@ -1619,6 +1675,20 @@ var util = {
   supports: (function() {
     if (typeof RTCPeerConnection === 'undefined') {
       return {};
+    }
+
+/*change log*/
+    if (typeof window.AdapterJS !== 'undefined' && (window.webrtcDetectedBrowser === 'IE' ||
+      window.webrtcDetectedBrowser === 'safari')) {
+      return {
+        audioVideo: true,
+        data: true,
+        binaryBlob: false,
+        binary: false, // deprecated; sctp implies binary support.
+        reliable: true, // deprecated; sctp implies reliable data.
+        sctp: true,
+        onnegotiationneeded: false
+      };
     }
 
     var data = true;
